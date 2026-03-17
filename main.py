@@ -50,22 +50,80 @@ REGRAS DE OURO:
 - Prompts de imagem SEMPRE em inglês, SEMPRE entre [IMG_PROMPT] e [/IMG_PROMPT]
 - Nunca inclua texto/tipografia dentro das imagens nos prompts
 - Seja criativa, foque em storytelling e ativação de desejo
-- Evite clichês — busque ângulos únicos e diferenciados"""
+- Evite clichês — busque ângulos únicos e diferenciados
+- Se o usuário enviar um PDF como conteúdo de referência, analise-o e transforme no formato solicitado
+- Se o usuário enviar imagens de referência visual, analise o estilo visual e reproduza nos prompts de imagem, adaptando às cores e identidade da marca do usuário"""
 
 
 @app.post("/api/generate")
 async def generate_content(request: Request):
     try:
         body = await request.json()
-        tema = body.get("tema", "")
+        tema = body.get("tema", "").strip()
         formato = body.get("formato", "Post")
-        brand_text = body.get("brand_text", "")
+        brand_text = body.get("brand_text", "").strip()
+        content_pdf = body.get("content_pdf", "")  # base64 string
+        ref_images = body.get("ref_images", [])     # list of {data, media_type}
 
         system = SYSTEM_PROMPT
         if brand_text:
             system += f"\n\n--- IDENTIDADE DE MARCA DO USUÁRIO ---\n{brand_text}\n--- FIM DA IDENTIDADE ---\nUse SOMENTE as informações acima para personalizar o conteúdo. Não invente dados adicionais."
 
-        user_msg = f'Tema: "{tema}"\nFormato: {formato}\n\nGere o conteúdo completo seguindo as regras.'
+        # Build the user message content (multimodal)
+        has_files = bool(content_pdf) or bool(ref_images)
+
+        # Build instruction text
+        parts = []
+        if tema and content_pdf:
+            parts.append(f'Tema: "{tema}"')
+            parts.append(f"Formato: {formato}")
+            parts.append("Analise o PDF de conteúdo anexado e use junto com o tema para gerar conteúdo no formato indicado.")
+        elif content_pdf:
+            parts.append(f"Formato: {formato}")
+            parts.append("Analise o PDF de conteúdo anexado e transforme-o em conteúdo para Instagram no formato indicado.")
+        elif tema:
+            parts.append(f'Tema: "{tema}"')
+            parts.append(f"Formato: {formato}")
+            parts.append("Gere o conteúdo completo seguindo as regras.")
+        else:
+            return JSONResponse({"error": "Envie um tema ou um PDF de conteúdo."}, status_code=400)
+
+        if ref_images:
+            parts.append(f"\n{len(ref_images)} imagem(ns) de referência visual anexadas. Analise o estilo visual e reproduza nos prompts de imagem, adaptando às cores da marca do usuário.")
+
+        instruction_text = "\n".join(parts)
+
+        if has_files:
+            # Multimodal content array
+            content = []
+
+            # Reference images first
+            for img in ref_images:
+                content.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": img.get("media_type", "image/jpeg"),
+                        "data": img["data"]
+                    }
+                })
+
+            # PDF
+            if content_pdf:
+                content.append({
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": content_pdf
+                    }
+                })
+
+            # Text instruction last
+            content.append({"type": "text", "text": instruction_text})
+        else:
+            # Simple text
+            content = instruction_text
 
         resp = requests.post(
             "https://api.anthropic.com/v1/messages",
@@ -78,7 +136,7 @@ async def generate_content(request: Request):
                 "model": "claude-sonnet-4-20250514",
                 "max_tokens": 4000,
                 "system": system,
-                "messages": [{"role": "user", "content": user_msg}]
+                "messages": [{"role": "user", "content": content}]
             },
             timeout=120
         )
