@@ -97,22 +97,6 @@ async def generate_content(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-def call_gemini_image(prompt, model="gemini-2.5-flash-image"):
-    """Single model call with retry on 429"""
-    resp = requests.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}",
-        headers={"Content-Type": "application/json"},
-        json={
-            "contents": [{"parts": [{"text": f"Generate this image: {prompt}"}]}],
-            "generationConfig": {
-                "responseModalities": ["TEXT", "IMAGE"]
-            }
-        },
-        timeout=120
-    )
-    return resp
-
-
 @app.post("/api/image")
 async def generate_image(request: Request):
     try:
@@ -122,40 +106,38 @@ async def generate_image(request: Request):
         if not prompt:
             return JSONResponse({"error": "Prompt vazio"}, status_code=400)
 
-        # Only use ONE model: gemini-2.5-flash-image (Nano Banana)
-        # Try up to 3 times with increasing delay on 429
-        model = "gemini-2.5-flash-image"
-        max_retries = 3
+        # Try models in order, ONE at a time, no retry cascade
+        models_to_try = [
+            "gemini-2.5-flash-image",
+            "gemini-3.1-flash-image-preview",
+            "gemini-3-pro-image-preview",
+        ]
 
-        for attempt in range(max_retries):
-            resp = call_gemini_image(prompt, model)
+        for model in models_to_try:
+            resp = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": f"Generate an image: {prompt}"}]}],
+                    "generationConfig": {
+                        "responseModalities": ["TEXT", "IMAGE"]
+                    }
+                },
+                timeout=120
+            )
 
-            if resp.status_code == 429:
-                # Rate limited - wait and retry
-                wait = (attempt + 1) * 15  # 15s, 30s, 45s
-                if attempt < max_retries - 1:
-                    time.sleep(wait)
-                    continue
-                else:
-                    return JSONResponse({
-                        "error": "Rate limit do Google. Aguarde 1 minuto e tente novamente."
-                    }, status_code=429)
+            # Skip to next model on 404 (model not available) or 429 (rate limit)
+            if resp.status_code in (404, 429):
+                time.sleep(2)
+                continue
 
             if resp.status_code != 200:
-                error_detail = ""
-                try:
-                    error_detail = resp.json().get("error", {}).get("message", "")
-                except:
-                    error_detail = resp.text[:200]
-                return JSONResponse({
-                    "error": f"Erro Gemini ({resp.status_code}): {error_detail}"
-                }, status_code=500)
+                continue
 
-            # Success - extract image
             data = resp.json()
             candidates = data.get("candidates", [])
             if not candidates:
-                return JSONResponse({"error": "Resposta vazia do Gemini"}, status_code=500)
+                continue
 
             parts = candidates[0].get("content", {}).get("parts", [])
             for part in parts:
@@ -167,12 +149,80 @@ async def generate_image(request: Request):
                         "model_used": model
                     })
 
-            return JSONResponse({"error": "Gemini respondeu sem imagem. Tente um prompt diferente."}, status_code=500)
-
-        return JSONResponse({"error": "Falha após 3 tentativas"}, status_code=500)
+        # If nothing worked, return detailed diagnostic
+        return JSONResponse({
+            "error": "Não foi possível gerar a imagem. Acesse /api/test-image no navegador para ver o diagnóstico completo."
+        }, status_code=500)
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/test-image")
+async def test_image():
+    """Diagnostic endpoint - tests each model with a simple prompt"""
+    test_prompt = "A simple orange cat sitting on a white background"
+    results = {}
+
+    models = [
+        "gemini-2.5-flash-image",
+        "gemini-3.1-flash-image-preview",
+        "gemini-3-pro-image-preview",
+        "nano-banana-pro-preview",
+    ]
+
+    for model in models:
+        try:
+            resp = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": f"Generate an image: {test_prompt}"}]}],
+                    "generationConfig": {
+                        "responseModalities": ["TEXT", "IMAGE"]
+                    }
+                },
+                timeout=60
+            )
+
+            status = resp.status_code
+            body = {}
+            try:
+                body = resp.json()
+            except:
+                body = {"raw": resp.text[:500]}
+
+            has_image = False
+            candidates = body.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                for part in parts:
+                    if "inlineData" in part:
+                        has_image = True
+
+            error_msg = ""
+            if "error" in body:
+                error_msg = body["error"].get("message", str(body["error"]))[:300]
+
+            results[model] = {
+                "status": status,
+                "has_image": has_image,
+                "error": error_msg,
+                "candidate_count": len(candidates),
+            }
+
+            # Don't hammer the API
+            time.sleep(3)
+
+        except Exception as e:
+            results[model] = {"status": "exception", "error": str(e)[:200]}
+
+    return JSONResponse({
+        "test_prompt": test_prompt,
+        "gemini_key_present": bool(GEMINI_KEY),
+        "gemini_key_prefix": GEMINI_KEY[:8] + "..." if GEMINI_KEY else "MISSING",
+        "results": results
+    })
 
 
 @app.get("/api/models")
@@ -196,7 +246,6 @@ async def list_models():
                     "displayName": m.get("displayName", ""),
                     "methods": methods
                 })
-
         return JSONResponse({"models": models, "total": len(models)})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
