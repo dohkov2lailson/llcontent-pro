@@ -118,7 +118,7 @@ async def generate_image(request: Request):
                 f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}",
                 headers={"Content-Type": "application/json"},
                 json={
-                    "contents": [{"parts": [{"text": f"Generate an image: {prompt}"}]}],
+                    "contents": [{"parts": [{"text": f"Generate an image: {prompt}\n\nIMPORTANT: All text, words, letters, and typography that appear inside the image MUST be written in Brazilian Portuguese (pt-BR). Never use English text in the image."}]}],
                     "generationConfig": {
                         "responseModalities": ["TEXT", "IMAGE"]
                     }
