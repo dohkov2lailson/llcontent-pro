@@ -14,9 +14,9 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-CATARINA_SYSTEM = """Você é a Catarina, gerente de marketing do LL Squad — equipe de personal trainers liderada pelo Lailson Lima, dono da academia Inove Fit em Campos dos Goytacazes/RJ.
+SYSTEM_PROMPT = """Você é a Catarina, uma especialista em criação de conteúdo para Instagram. Você gera material profissional e de alto engajamento, personalizado para qualquer marca ou profissional.
 
-Você é especialista em criação de conteúdo para Instagram. Também cria conteúdo para outras marcas quando recebe a identidade visual.
+REGRA FUNDAMENTAL: Você cria conteúdo baseado EXCLUSIVAMENTE na identidade de marca que o usuário forneceu. NUNCA invente nomes de empresa, hashtags de marca, slogans ou informações que o usuário não tenha fornecido.
 
 Regras por formato:
 
@@ -24,13 +24,12 @@ POST SIMPLES:
 - Título curto e chamativo
 - Texto principal curto e escaneável
 - Sugestão visual para a imagem do post
-- Prompt detalhado para gerar a imagem em IA (em inglês, formato vertical 4:5, sem texto na imagem). IMPORTANTE: coloque o prompt entre as tags [IMG_PROMPT] e [/IMG_PROMPT] para facilitar a extração.
+- Prompt detalhado para gerar a imagem em IA (em inglês, formato vertical 4:5, sem texto na imagem). Coloque o prompt entre as tags [IMG_PROMPT] e [/IMG_PROMPT]
 - Legenda otimizada para Instagram
-- Entre 5 e 8 hashtags relevantes
+- Entre 5 e 8 hashtags relevantes (APENAS hashtags genéricas do nicho. Inclua hashtags da marca SOMENTE se o usuário as informou explicitamente)
 
 CARROSSEL (6 a 8 slides):
-- Para cada slide: Título, Texto curto, Sugestão visual, Prompt para imagem (em inglês)
-- Coloque cada prompt de imagem entre [IMG_PROMPT] e [/IMG_PROMPT]
+- Para cada slide: Título, Texto curto, Sugestão visual, Prompt para imagem (em inglês entre [IMG_PROMPT] e [/IMG_PROMPT])
 - Slide 1 = capa com forte curiosidade
 - Demais slides: infográficos, ícones, diagramas, elementos educativos
 
@@ -42,13 +41,16 @@ REELS:
 - Legenda
 - Hashtags
 
-Regras gerais:
+REGRAS DE OURO:
 - Sempre responda em português do Brasil
-- Seja criativa, linguagem conectada ao público-alvo da marca
-- Tom: profissional mas descontraído, motivacional sem ser clichê
-- Foque em storytelling e ativação de desejo através de dores
+- Adapte tom de voz, linguagem e estilo 100% ao que o usuário definiu na identidade de marca
+- Se o usuário NÃO forneceu identidade de marca, use tom neutro e profissional
+- NUNCA invente hashtags com nomes de marcas, empresas ou pessoas que o usuário não mencionou
+- NUNCA faça referência a marcas, academias, empresas ou pessoas específicas que não estejam na identidade de marca fornecida
 - Prompts de imagem SEMPRE em inglês, SEMPRE entre [IMG_PROMPT] e [/IMG_PROMPT]
-- Nunca inclua texto/tipografia dentro das imagens nos prompts"""
+- Nunca inclua texto/tipografia dentro das imagens nos prompts
+- Seja criativa, foque em storytelling e ativação de desejo
+- Evite clichês — busque ângulos únicos e diferenciados"""
 
 
 @app.post("/api/generate")
@@ -59,11 +61,11 @@ async def generate_content(request: Request):
         formato = body.get("formato", "Post")
         brand_text = body.get("brand_text", "")
 
-        system = CATARINA_SYSTEM
+        system = SYSTEM_PROMPT
         if brand_text:
-            system += f"\n\nIDENTIDADE DA MARCA:\n{brand_text}"
+            system += f"\n\n--- IDENTIDADE DE MARCA DO USUÁRIO ---\n{brand_text}\n--- FIM DA IDENTIDADE ---\nUse SOMENTE as informações acima para personalizar o conteúdo. Não invente dados adicionais."
 
-        user_msg = f'Tema: "{tema}"\nFormato: {formato}\n\nGere o conteúdo completo.'
+        user_msg = f'Tema: "{tema}"\nFormato: {formato}\n\nGere o conteúdo completo seguindo as regras.'
 
         resp = requests.post(
             "https://api.anthropic.com/v1/messages",
@@ -106,14 +108,10 @@ async def generate_image(request: Request):
         if not prompt:
             return JSONResponse({"error": "Prompt vazio"}, status_code=400)
 
-        # Try models in order, ONE at a time, no retry cascade
-        models_to_try = [
-            "gemini-2.5-flash-image",
-            "gemini-3.1-flash-image-preview",
-            "gemini-3-pro-image-preview",
-        ]
+        model = "gemini-2.5-flash-image"
+        max_retries = 3
 
-        for model in models_to_try:
+        for attempt in range(max_retries):
             resp = requests.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}",
                 headers={"Content-Type": "application/json"},
@@ -126,18 +124,26 @@ async def generate_image(request: Request):
                 timeout=120
             )
 
-            # Skip to next model on 404 (model not available) or 429 (rate limit)
-            if resp.status_code in (404, 429):
-                time.sleep(2)
-                continue
+            if resp.status_code == 429:
+                wait = (attempt + 1) * 15
+                if attempt < max_retries - 1:
+                    time.sleep(wait)
+                    continue
+                else:
+                    return JSONResponse({"error": "Limite de requisições. Aguarde 1 minuto e tente novamente."}, status_code=429)
 
             if resp.status_code != 200:
-                continue
+                error_detail = ""
+                try:
+                    error_detail = resp.json().get("error", {}).get("message", "")
+                except:
+                    error_detail = resp.text[:200]
+                return JSONResponse({"error": f"Erro ({resp.status_code}): {error_detail}"}, status_code=500)
 
             data = resp.json()
             candidates = data.get("candidates", [])
             if not candidates:
-                continue
+                return JSONResponse({"error": "Resposta vazia"}, status_code=500)
 
             parts = candidates[0].get("content", {}).get("parts", [])
             for part in parts:
@@ -149,80 +155,12 @@ async def generate_image(request: Request):
                         "model_used": model
                     })
 
-        # If nothing worked, return detailed diagnostic
-        return JSONResponse({
-            "error": "Não foi possível gerar a imagem. Acesse /api/test-image no navegador para ver o diagnóstico completo."
-        }, status_code=500)
+            return JSONResponse({"error": "Resposta sem imagem. Tente um prompt diferente."}, status_code=500)
+
+        return JSONResponse({"error": "Falha após tentativas"}, status_code=500)
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-
-
-@app.get("/api/test-image")
-async def test_image():
-    """Diagnostic endpoint - tests each model with a simple prompt"""
-    test_prompt = "A simple orange cat sitting on a white background"
-    results = {}
-
-    models = [
-        "gemini-2.5-flash-image",
-        "gemini-3.1-flash-image-preview",
-        "gemini-3-pro-image-preview",
-        "nano-banana-pro-preview",
-    ]
-
-    for model in models:
-        try:
-            resp = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}",
-                headers={"Content-Type": "application/json"},
-                json={
-                    "contents": [{"parts": [{"text": f"Generate an image: {test_prompt}"}]}],
-                    "generationConfig": {
-                        "responseModalities": ["TEXT", "IMAGE"]
-                    }
-                },
-                timeout=60
-            )
-
-            status = resp.status_code
-            body = {}
-            try:
-                body = resp.json()
-            except:
-                body = {"raw": resp.text[:500]}
-
-            has_image = False
-            candidates = body.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                for part in parts:
-                    if "inlineData" in part:
-                        has_image = True
-
-            error_msg = ""
-            if "error" in body:
-                error_msg = body["error"].get("message", str(body["error"]))[:300]
-
-            results[model] = {
-                "status": status,
-                "has_image": has_image,
-                "error": error_msg,
-                "candidate_count": len(candidates),
-            }
-
-            # Don't hammer the API
-            time.sleep(3)
-
-        except Exception as e:
-            results[model] = {"status": "exception", "error": str(e)[:200]}
-
-    return JSONResponse({
-        "test_prompt": test_prompt,
-        "gemini_key_present": bool(GEMINI_KEY),
-        "gemini_key_prefix": GEMINI_KEY[:8] + "..." if GEMINI_KEY else "MISSING",
-        "results": results
-    })
 
 
 @app.get("/api/models")
@@ -234,18 +172,8 @@ async def list_models():
         )
         if resp.status_code != 200:
             return JSONResponse({"error": resp.text[:300]}, status_code=resp.status_code)
-
         data = resp.json()
-        models = []
-        for m in data.get("models", []):
-            name = m.get("name", "")
-            methods = m.get("supportedGenerationMethods", [])
-            if "generateContent" in methods:
-                models.append({
-                    "name": name,
-                    "displayName": m.get("displayName", ""),
-                    "methods": methods
-                })
+        models = [{"name": m.get("name", ""), "displayName": m.get("displayName", "")} for m in data.get("models", []) if "generateContent" in m.get("supportedGenerationMethods", [])]
         return JSONResponse({"models": models, "total": len(models)})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
