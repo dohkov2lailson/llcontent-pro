@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import json
 import base64
 import requests
@@ -49,13 +50,6 @@ Regras gerais:
 - Prompts de imagem SEMPRE em inglês, SEMPRE entre [IMG_PROMPT] e [/IMG_PROMPT]
 - Nunca inclua texto/tipografia dentro das imagens nos prompts"""
 
-# Correct model names from user's API key
-GEMINI_IMAGE_MODELS = [
-    "gemini-3.1-flash-image-preview",   # Nano Banana 2
-    "gemini-3-pro-image-preview",        # Nano Banana Pro
-    "gemini-2.5-flash-image",            # Nano Banana original
-]
-
 
 @app.post("/api/generate")
 async def generate_content(request: Request):
@@ -103,6 +97,22 @@ async def generate_content(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+def call_gemini_image(prompt, model="gemini-2.5-flash-image"):
+    """Single model call with retry on 429"""
+    resp = requests.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}",
+        headers={"Content-Type": "application/json"},
+        json={
+            "contents": [{"parts": [{"text": f"Generate this image: {prompt}"}]}],
+            "generationConfig": {
+                "responseModalities": ["TEXT", "IMAGE"]
+            }
+        },
+        timeout=120
+    )
+    return resp
+
+
 @app.post("/api/image")
 async def generate_image(request: Request):
     try:
@@ -112,49 +122,54 @@ async def generate_image(request: Request):
         if not prompt:
             return JSONResponse({"error": "Prompt vazio"}, status_code=400)
 
-        last_error = ""
-        for model in GEMINI_IMAGE_MODELS:
-            try:
-                resp = requests.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}",
-                    headers={"Content-Type": "application/json"},
-                    json={
-                        "contents": [{"parts": [{"text": f"Generate this image: {prompt}"}]}],
-                        "generationConfig": {
-                            "responseModalities": ["TEXT", "IMAGE"]
-                        }
-                    },
-                    timeout=120
-                )
+        # Only use ONE model: gemini-2.5-flash-image (Nano Banana)
+        # Try up to 3 times with increasing delay on 429
+        model = "gemini-2.5-flash-image"
+        max_retries = 3
 
-                if resp.status_code != 200:
-                    last_error = f"{model}: HTTP {resp.status_code}"
+        for attempt in range(max_retries):
+            resp = call_gemini_image(prompt, model)
+
+            if resp.status_code == 429:
+                # Rate limited - wait and retry
+                wait = (attempt + 1) * 15  # 15s, 30s, 45s
+                if attempt < max_retries - 1:
+                    time.sleep(wait)
                     continue
+                else:
+                    return JSONResponse({
+                        "error": "Rate limit do Google. Aguarde 1 minuto e tente novamente."
+                    }, status_code=429)
 
-                data = resp.json()
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    last_error = f"{model}: sem candidatos"
-                    continue
+            if resp.status_code != 200:
+                error_detail = ""
+                try:
+                    error_detail = resp.json().get("error", {}).get("message", "")
+                except:
+                    error_detail = resp.text[:200]
+                return JSONResponse({
+                    "error": f"Erro Gemini ({resp.status_code}): {error_detail}"
+                }, status_code=500)
 
-                parts = candidates[0].get("content", {}).get("parts", [])
-                for part in parts:
-                    if "inlineData" in part:
-                        img_data = part["inlineData"]
-                        return JSONResponse({
-                            "image": img_data["data"],
-                            "mime": img_data.get("mimeType", "image/png"),
-                            "model_used": model
-                        })
+            # Success - extract image
+            data = resp.json()
+            candidates = data.get("candidates", [])
+            if not candidates:
+                return JSONResponse({"error": "Resposta vazia do Gemini"}, status_code=500)
 
-                last_error = f"{model}: resposta sem inlineData"
-                continue
+            parts = candidates[0].get("content", {}).get("parts", [])
+            for part in parts:
+                if "inlineData" in part:
+                    img_data = part["inlineData"]
+                    return JSONResponse({
+                        "image": img_data["data"],
+                        "mime": img_data.get("mimeType", "image/png"),
+                        "model_used": model
+                    })
 
-            except Exception as e:
-                last_error = f"{model}: {str(e)}"
-                continue
+            return JSONResponse({"error": "Gemini respondeu sem imagem. Tente um prompt diferente."}, status_code=500)
 
-        return JSONResponse({"error": f"Nenhum modelo gerou imagem. Último: {last_error}"}, status_code=500)
+        return JSONResponse({"error": "Falha após 3 tentativas"}, status_code=500)
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
