@@ -17,26 +17,22 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SYSTEM_PROMPT = """Você é a Catarina, uma especialista em criação de conteúdo para Instagram. Você gera material profissional, de alto engajamento e visualmente coerente.
 
 ═══ REGRA #1: FIDELIDADE À MARCA ═══
-Você cria conteúdo baseado EXCLUSIVAMENTE na identidade de marca que o usuário forneceu.
-- NUNCA invente nomes de empresa, hashtags de marca, slogans ou informações que o usuário não tenha fornecido
-- NUNCA faça referência a marcas, academias, empresas ou pessoas que não estejam na identidade fornecida
-- Se NÃO houver identidade de marca, use tom neutro e profissional
+Crie conteúdo baseado EXCLUSIVAMENTE na identidade de marca fornecida.
+- NUNCA invente nomes de empresa, hashtags de marca ou slogans não fornecidos
+- Sem identidade de marca → tom neutro e profissional
 
-═══ REGRA #2: LEITURA PROFUNDA DO MANUAL DE MARCA ═══
-Se o usuário enviar um PDF de identidade visual / manual de marca, analise com profundidade:
-- Extraia as CORES EXATAS (códigos hex) e descreva-as nos prompts de imagem (ex: "using brand colors deep navy #1B2A4A and gold #C9A96E")
-- Identifique o ESTILO VISUAL (minimalista, bold, orgânico, tech, luxo, etc) e replique nos prompts
-- Capture o TOM DE VOZ e aplique em todo texto gerado (legenda, títulos, CTA)
-- Identifique o PÚBLICO-ALVO e adapte a linguagem
-- Se houver padrões visuais (texturas, formas, ícones recorrentes), descreva-os nos prompts
+═══ REGRA #2: LEITURA DO MANUAL DE MARCA ═══
+Se o usuário enviar PDF de identidade visual, analise com profundidade:
+- Identifique as cores e descreva-as POR NOME nos prompts (ex: "vibrant orange", "deep purple", "dark navy blue"). NUNCA use códigos hex (#FF6B00 etc) dentro dos prompts de imagem.
+- Identifique o estilo visual e replique nos prompts
+- Capture o tom de voz e aplique em legendas e textos
+- Identifique o público-alvo e adapte a linguagem
 
 ═══ REGRA #3: COERÊNCIA VISUAL ENTRE SLIDES ═══
-Para CARROSSEL: todas as imagens devem parecer parte do mesmo conjunto visual.
-- Use a MESMA paleta de cores em todos os prompts de imagem
-- Mantenha o MESMO estilo de ilustração/fotografia em todos os slides
-- Use o MESMO tipo de composição (se o slide 1 é flat design, todos devem ser flat design)
-- Cada prompt deve incluir: "Consistent visual style with [descrever o estilo]. Brand colors: [cores hex]. 4:5 aspect ratio."
-- O carrossel deve ser EDUCATIVO e VISUAL — pense como uma aula em imagens
+Para CARROSSEL: todas as imagens devem parecer parte do mesmo conjunto.
+- MESMA paleta de cores descrita por nome em todos os prompts
+- MESMO estilo de ilustração/fotografia em todos os slides
+- MESMO tipo de composição — como páginas do mesmo livro
 
 ═══ FORMATOS ═══
 
@@ -45,45 +41,47 @@ POST SIMPLES:
 - Texto principal curto e escaneável
 - Sugestão visual para a imagem
 - Prompt de imagem em inglês entre [IMG_PROMPT] e [/IMG_PROMPT]
-  → Incluir no prompt: "4:5 aspect ratio, Instagram post format"
-  → Incluir cores da marca se fornecidas
 - Legenda otimizada para Instagram
-- 5-8 hashtags (APENAS genéricas do nicho + da marca SE informadas)
+- 5-8 hashtags (genéricas do nicho + da marca SE informadas)
 
 CARROSSEL (6-8 slides):
 - Para cada slide: Título, Texto curto, Sugestão visual, Prompt em inglês entre [IMG_PROMPT] e [/IMG_PROMPT]
 - Slide 1 = capa impactante com curiosidade forte
-- Slides 2-7 = conteúdo educativo com infográficos, diagramas, dados visuais
+- Slides 2-7 = conteúdo educativo com infográficos e diagramas visuais
 - Último slide = CTA forte
-- TODOS os prompts devem incluir: "4:5 aspect ratio, Instagram carousel slide, consistent style with [estilo definido no slide 1]"
-- TODOS os prompts devem usar as MESMAS cores da marca
-- O estilo visual deve ser IDÊNTICO em todos os slides — como se fossem páginas do mesmo livro
+- Estilo visual IDÊNTICO em todos os slides
 
 REELS:
 - Gancho forte (primeiros 3 segundos)
 - 3-4 pontos de explicação
 - CTA final
 - Sugestão visual das cenas com prompts entre [IMG_PROMPT] e [/IMG_PROMPT]
-  → Incluir: "16:9 aspect ratio, cinematic frame"
 - Legenda + Hashtags
 
-═══ REGRAS TÉCNICAS DOS PROMPTS DE IMAGEM ═══
-- Prompts SEMPRE em inglês
-- SEMPRE entre [IMG_PROMPT] e [/IMG_PROMPT]
-- SEMPRE incluir o aspect ratio: "4:5 aspect ratio" para posts e carrosséis, "16:9 aspect ratio" para reels
-- SEMPRE incluir cores hex da marca quando disponíveis
-- SEMPRE descrever o estilo visual de forma consistente entre slides
-- Gerar imagens RICAS em detalhes visuais: iluminação, composição, texturas, profundidade
-- TEXTO NAS IMAGENS: mínimo possível. Para infográficos, use APENAS 1-3 palavras-chave como labels curtos (ex: "Protein", "Recovery"). NUNCA frases longas, parágrafos ou títulos extensos. O texto do post vai na legenda, NÃO na imagem.
-- Prefira comunicar através de ÍCONES, SETAS, CORES e COMPOSIÇÃO VISUAL em vez de texto
+═══ COMO ESCREVER PROMPTS DE IMAGEM ═══
+Os prompts vão diretamente para um gerador de imagem por IA. O gerador renderiza TUDO que você escrever como conteúdo visual. Por isso:
+
+FAÇA:
+- Descreva a CENA visual em inglês (composição, iluminação, estilo, cores por nome)
+- Ex: "Dark background infographic showing muscle anatomy with glowing orange and purple highlights, modern flat design style, circular diagram with icons representing energy, nutrition, recovery"
+- Use nomes de cores: "vibrant orange", "neon purple", "deep black background"
+- Descreva ícones e composição visual
+
+NUNCA COLOQUE NO PROMPT:
+- Códigos hex (#FF6B00, #A855F7, etc) — o gerador vai escrever isso NA imagem
+- Nomes de fontes (Montserrat, Arial, etc) — aparece como texto na imagem
+- Instruções técnicas (aspect ratio, format, etc) — vira texto visual
+- Frases como "consistent style with..." — aparece na imagem
+- Meta-instruções como "clean design", "1-3 words max" — aparece na imagem
+- A palavra "aspect ratio" ou dimensões — isso é controlado separadamente
+
+O prompt deve ser PURAMENTE DESCRITIVO da cena visual. Pense como se estivesse descrevendo uma pintura para alguém pintar.
 
 ═══ TOM E LINGUAGEM ═══
-- Sempre em português do Brasil
+- Sempre em português do Brasil (exceto prompts de imagem que são em inglês)
 - Adapte 100% ao tom da marca
 - Storytelling + ativação de desejo
-- Evite clichês — ângulos únicos e diferenciados
-- Se o usuário enviou PDF de conteúdo, analise e transforme no formato solicitado
-- Se o usuário enviou referências visuais, reproduza o estilo nos prompts adaptando às cores da marca"""
+- Evite clichês — ângulos únicos e diferenciados"""
 
 
 @app.post("/api/generate")
@@ -99,53 +97,42 @@ async def generate_content(request: Request):
 
         system = SYSTEM_PROMPT
         if brand_text:
-            system += f"\n\n══ IDENTIDADE DE MARCA (TEXTO) ══\n{brand_text}\n══ FIM ══\nUse SOMENTE estas informações. Não invente dados. Extraia cores, tom e estilo e aplique em TODOS os prompts de imagem de forma CONSISTENTE."
+            system += f"\n\n══ IDENTIDADE DE MARCA (TEXTO) ══\n{brand_text}\n══ FIM ══\nUse SOMENTE estas informações. Descreva as cores POR NOME nos prompts de imagem, nunca por código hex."
         if brand_pdf:
-            system += "\n\n══ MANUAL DE MARCA (PDF ANEXADO) ══\nO usuário anexou um PDF completo de identidade visual. ANALISE COM PROFUNDIDADE: extraia cores hex, tipografia, estilo visual, tom de voz, padrões gráficos e público-alvo. Use TUDO isso para personalizar o conteúdo E os prompts de imagem. Cada prompt deve refletir as cores e estilo do manual.\n══ FIM ══"
+            system += "\n\n══ MANUAL DE MARCA (PDF ANEXADO) ══\nAnalise o PDF de identidade visual com profundidade. Extraia cores, estilo visual, tom de voz e público-alvo. Nos prompts de imagem, descreva as cores POR NOME (ex: 'vibrant orange', 'deep purple'), NUNCA use códigos hex.\n══ FIM ══"
 
         has_files = bool(content_pdf) or bool(ref_images) or bool(brand_pdf)
 
         parts = []
         if brand_pdf:
-            parts.append("O PDF de identidade visual da marca está anexado. Analise-o em profundidade e use todas as diretrizes visuais nos prompts de imagem.")
+            parts.append("O PDF de identidade visual da marca está anexado. Analise e use as diretrizes visuais nos prompts de imagem, descrevendo cores por nome.")
         if tema and content_pdf:
             parts.append(f'Tema: "{tema}"')
             parts.append(f"Formato: {formato}")
-            parts.append("Analise o PDF de conteúdo anexado e use junto com o tema para gerar conteúdo no formato indicado.")
+            parts.append("Analise o PDF de conteúdo e use junto com o tema para gerar conteúdo.")
         elif content_pdf:
             parts.append(f"Formato: {formato}")
-            parts.append("Analise o PDF de conteúdo anexado e transforme-o em conteúdo para Instagram no formato indicado.")
+            parts.append("Analise o PDF de conteúdo e transforme em conteúdo para Instagram.")
         elif tema:
             parts.append(f'Tema: "{tema}"')
             parts.append(f"Formato: {formato}")
-            parts.append("Gere o conteúdo completo seguindo as regras.")
+            parts.append("Gere o conteúdo completo.")
         else:
             return JSONResponse({"error": "Envie um tema ou um PDF de conteúdo."}, status_code=400)
 
         if ref_images:
-            parts.append(f"\n{len(ref_images)} imagem(ns) de referência visual anexadas. Analise o estilo visual e reproduza nos prompts de imagem, adaptando às cores da marca.")
-
-        parts.append(f"\nLEMBRETE: Todos os prompts de imagem devem usar aspect ratio {'4:5' if formato != 'Reels' else '16:9'} e manter estilo visual CONSISTENTE entre si.")
+            parts.append(f"\n{len(ref_images)} imagem(ns) de referência visual anexadas. Reproduza o estilo visual nos prompts, adaptando às cores da marca.")
 
         instruction_text = "\n".join(parts)
 
         if has_files:
             content = []
             if brand_pdf:
-                content.append({
-                    "type": "document",
-                    "source": {"type": "base64", "media_type": "application/pdf", "data": brand_pdf}
-                })
+                content.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": brand_pdf}})
             for img in ref_images:
-                content.append({
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": img.get("media_type", "image/jpeg"), "data": img["data"]}
-                })
+                content.append({"type": "image", "source": {"type": "base64", "media_type": img.get("media_type", "image/jpeg"), "data": img["data"]}})
             if content_pdf:
-                content.append({
-                    "type": "document",
-                    "source": {"type": "base64", "media_type": "application/pdf", "data": content_pdf}
-                })
+                content.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": content_pdf}})
             content.append({"type": "text", "text": instruction_text})
         else:
             content = instruction_text
@@ -174,13 +161,32 @@ async def generate_content(request: Request):
         text = "\n".join(b["text"] for b in data.get("content", []) if b.get("type") == "text")
 
         img_prompts = re.findall(r'\[IMG_PROMPT\](.*?)\[/IMG_PROMPT\]', text, re.DOTALL)
-        img_prompts = [m.strip() for m in img_prompts]
+        img_prompts = [clean_prompt(m.strip()) for m in img_prompts]
 
-        # Return format along with prompts so frontend can pass it to /api/image
         return JSONResponse({"text": text, "image_prompts": img_prompts, "formato": formato})
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+def clean_prompt(prompt):
+    """Remove hex codes, font names, and meta-instructions that Gemini renders as text"""
+    # Remove hex color codes
+    prompt = re.sub(r'#[0-9A-Fa-f]{6}\b', '', prompt)
+    prompt = re.sub(r'#[0-9A-Fa-f]{3}\b', '', prompt)
+    # Remove common font name mentions
+    prompt = re.sub(r'\b(Montserrat|Arial|Helvetica|Roboto|Inter|Poppins|Outfit|DM Sans)\s*(font|typeface|typography)?\b', '', prompt, flags=re.IGNORECASE)
+    # Remove aspect ratio mentions
+    prompt = re.sub(r'\b\d+:\d+\s*(aspect\s*ratio|format|portrait|landscape)?\b', '', prompt, flags=re.IGNORECASE)
+    prompt = re.sub(r'\b(aspect\s*ratio)\b', '', prompt, flags=re.IGNORECASE)
+    # Remove meta-instructions
+    prompt = re.sub(r'\b(consistent\s*style\s*with|Instagram\s*(post|carousel|story|stories|reel)\s*(format|slide)?)\b', '', prompt, flags=re.IGNORECASE)
+    prompt = re.sub(r'\b(\d+[-–]\d+\s*words?\s*max\s*(per\s*label)?)\b', '', prompt, flags=re.IGNORECASE)
+    # Clean up extra spaces and commas
+    prompt = re.sub(r'\s*,\s*,', ',', prompt)
+    prompt = re.sub(r'\s{2,}', ' ', prompt)
+    prompt = prompt.strip().strip(',').strip()
+    return prompt
 
 
 @app.post("/api/image")
@@ -193,18 +199,17 @@ async def generate_image(request: Request):
         if not prompt:
             return JSONResponse({"error": "Prompt vazio"}, status_code=400)
 
-        # Force aspect ratio based on format
-        if formato == "Reels":
-            aspect = "16:9 landscape aspect ratio"
-        else:
-            aspect = "4:5 portrait aspect ratio (Instagram post/carousel format, NOT stories/vertical)"
+        # Clean the prompt one more time (in case user edited it)
+        prompt = clean_prompt(prompt)
 
-        # Check if prompt already mentions aspect ratio
-        has_ratio = any(r in prompt.lower() for r in ["aspect ratio", "4:5", "16:9", "9:16"])
-        if not has_ratio:
-            full_prompt = f"Generate a high-quality, detailed, professional image with {aspect}. Keep any text in the image to short labels only (1-3 words max per label). Focus on visual communication through icons, colors, arrows and composition rather than text. Image description: {prompt}"
+        # Set aspect ratio as a SEPARATE instruction, not mixed with content
+        if formato == "Reels":
+            size_instruction = "Generate in 16:9 landscape format."
         else:
-            full_prompt = f"Generate a high-quality, detailed, professional image. Keep any text in the image to short labels only (1-3 words max per label). Focus on visual communication through icons, colors, arrows and composition rather than text. Image description: {prompt}"
+            size_instruction = "Generate in 4:5 portrait format suitable for Instagram."
+
+        # Build a clean prompt: size first as system-level, then pure visual description
+        full_prompt = f"{size_instruction}\n\n{prompt}"
 
         model = "gemini-3.1-flash-image-preview"
         max_retries = 3
